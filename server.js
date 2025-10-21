@@ -5,73 +5,123 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import XLSX from "xlsx";
+import fetch from "node-fetch";
 
 dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// === Configuração de middlewares ===
 app.use(express.json());
 app.use(cors());
 
-// === Servir a pasta public ===
 const __dirname = path.resolve();
 app.use(express.static(path.join(__dirname, "public")));
 
-// === Configuração de upload ===
 const upload = multer({ dest: "uploads/" });
 
-// === Rota inicial (mostra o front) ===
+/**
+ * Rota inicial
+ */
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// === Upload de planilha ===
+/**
+ * Upload de planilha + Token dinâmico do usuário
+ */
 app.post("/api/upload", upload.single("file"), async (req, res) => {
   try {
-    const filePath = req.file.path;
+    const filePath = req.file?.path;
+    const token = req.body.token?.trim();
+
+    if (!filePath || !token)
+      return res.status(400).json({ error: "Token ou arquivo ausente." });
+
     const workbook = XLSX.readFile(filePath);
-    const sheetName = workbook.SheetNames[0];
-    const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
+    const sheet = workbook.SheetNames[0];
+    const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheet]);
 
-    // Aqui é onde você faria o envio para a API do Mercado Livre
-    // (exemplo: for await (const produto of data) { ... })
+    const resultados = [];
 
-    // Exemplo: gerar JSON de resultado
-    const resultados = data.map((item, index) => ({
-      sku: item.sku || `#${index + 1}`,
-      status: "✅ Publicado com sucesso",
-      id_ml: Math.floor(Math.random() * 9999999999),
-      link: "https://www.mercadolivre.com.br/",
-    }));
+    for (let i = 0; i < data.length; i++) {
+      const produto = data[i];
 
+      try {
+        const response = await fetch("https://api.mercadolibre.com/items", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            title: produto.title || produto.nome || "Produto sem título",
+            category_id: produto.category_id || "MLB1430",
+            price: Number(produto.price) || 99.9,
+            currency_id: "BRL",
+            available_quantity: Number(produto.stock) || 10,
+            buying_mode: "buy_it_now",
+            listing_type_id: "gold_special",
+            condition: "new",
+            description: { plain_text: produto.description || "Sem descrição" },
+            pictures: produto.images
+              ? produto.images.split(",").map((url) => ({ source: url.trim() }))
+              : [],
+          }),
+        });
+
+        const json = await response.json();
+
+        if (response.ok && json.id) {
+          resultados.push({
+            sku: produto.sku || `#${i + 1}`,
+            status: "✅ Publicado com sucesso",
+            id_ml: json.id,
+            link: `https://mercadolivre.com.br/item/${json.id}`,
+          });
+        } else {
+          resultados.push({
+            sku: produto.sku || `#${i + 1}`,
+            status: `❌ ${json.message || json.error || "Erro de validação"}`,
+            id_ml: "-",
+            link: "-",
+          });
+        }
+      } catch (error) {
+        resultados.push({
+          sku: produto.sku || `#${i + 1}`,
+          status: `❌ Falha: ${error.message}`,
+          id_ml: "-",
+          link: "-",
+        });
+      }
+    }
+
+    // Salvar resultados
     const resultadosData = {
-      sucesso: resultados.length,
-      falhas: 0,
+      sucesso: resultados.filter((r) => r.status.includes("✅")).length,
+      falhas: resultados.filter((r) => r.status.includes("❌")).length,
       resultados,
     };
 
-    // Cria pasta caso não exista
     const resultPath = path.join(__dirname, "public", "api", "resultados.json");
     fs.mkdirSync(path.dirname(resultPath), { recursive: true });
     fs.writeFileSync(resultPath, JSON.stringify(resultadosData, null, 2));
-
-    // Limpa arquivo enviado
     fs.unlinkSync(filePath);
 
-    res.json({ ok: true, count: resultados.length });
+    res.json({ ok: true });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Erro ao processar planilha" });
+    console.error("❌ Erro:", err);
+    res.status(500).json({ error: "Erro ao processar a planilha" });
   }
 });
 
-// === Rota do painel ===
+/**
+ * Painel e resultados
+ */
 app.get("/painel.html", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "painel.html"));
 });
 
-// === Rota de resultados ===
 app.get("/api/resultados.json", (req, res) => {
   const resultPath = path.join(__dirname, "public", "api", "resultados.json");
   if (fs.existsSync(resultPath)) {
@@ -82,7 +132,4 @@ app.get("/api/resultados.json", (req, res) => {
   }
 });
 
-// === Inicia servidor ===
-app.listen(PORT, () => {
-  console.log(`🔥 AutoVend rodando na porta ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 AutoVend rodando na porta ${PORT}`));
