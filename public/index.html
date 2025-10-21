@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MVP Publicador em Massa (CSV → Mercado Livre)</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, sans-serif;
+      max-width: 920px;
+      margin: 40px auto;
+      padding: 0 16px;
+      background: #fafafa;
+    }
+    .card {
+      border: 1px solid #e5e7eb;
+      border-radius: 14px;
+      padding: 18px;
+      margin: 16px 0;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      background: white;
+    }
+    button {
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: none;
+      background: #111827;
+      color: white;
+      cursor: pointer;
+    }
+    button[disabled] {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      border-bottom: 1px solid #eee;
+      padding: 8px;
+      text-align: left;
+      font-size: 14px;
+    }
+    .muted {
+      color: #6b7280;
+    }
+    .tag {
+      background: #eef2ff;
+      color: #3730a3;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <h1>📦 MVP Publicador em Massa → Mercado Livre</h1>
+  <button id="btnConnect" style="background:#007aff;color:white;padding:10px 16px;border:none;border-radius:8px;cursor:pointer;margin-bottom:10px;">
+  🔗 Conectar Mercado Livre
+</button>
+
+<script>
+  document.getElementById("btnConnect").addEventListener("click", () => {
+    window.open("/ml/auth", "_blank", "width=600,height=700");
+  });
+</script>
+
+  <p class="muted">
+    Faça upload do seu <strong>CSV</strong> e publique em massa. (DRY_RUN controla se chama a API real)
+  </p>
+
+  <div class="card">
+    <h2>1) Upload do CSV</h2>
+    <form id="formUpload">
+      <input type="file" name="file" accept=".csv" required />
+      <button type="submit">Enviar CSV</button>
+    </form>
+    <div id="uploadResult" class="muted" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>2) Publicar em Massa no Mercado Livre</h2>
+    <label>
+      Itens a processar (limit):
+      <input id="limit" type="number" min="1" max="200" value="50" />
+    </label>
+    <label style="margin-left:16px;">
+      Concorrência:
+      <input id="conc" type="number" min="1" max="10" value="2" />
+    </label>
+    <div style="margin-top:10px;"><button id="btnPublish">Publicar</button></div>
+    <div id="publishResult" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>Logs</h2>
+    <button id="btnLogs">Atualizar Logs</button>
+    <div id="logs" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>Formato do CSV</h2>
+    <div class="muted">
+      Cabeçalhos esperados (em qualquer ordem):
+      <span class="tag">sku</span>
+      <span class="tag">title</span>
+      <span class="tag">description</span>
+      <span class="tag">price</span>
+      <span class="tag">stock</span>
+      <span class="tag">images</span>
+      <span class="tag">brand</span>
+      <span class="tag">color</span>
+      <span class="tag">size</span>
+      <span class="tag">category_ml</span>
+    </div>
+  </div>
+
+<script>
+const $ = sel => document.querySelector(sel);
+
+$('#formUpload').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  $('#uploadResult').textContent = 'Enviando...';
+  try {
+    const r = await fetch('/api/upload', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Falha no upload');
+    $('#uploadResult').innerHTML = `Foram carregados <b>${j.count}</b> produtos. Amostra:` + renderTable(j.sample);
+  } catch (err) {
+    $('#uploadResult').textContent = 'Erro: ' + err.message;
+  }
+});
+
+$('#btnPublish').addEventListener('click', async () => {
+  const limit = Number($('#limit').value || 50);
+  const concurrency = Number($('#conc').value || 2);
+  $('#btnPublish').disabled = true;
+  $('#publishResult').textContent = 'Publicando...';
+  try {
+    const r = await fetch('/api/publish/ml', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ limit, concurrency })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Falha na publicação');
+    $('#publishResult').innerHTML = `Processados: <b>${j.processed}</b> | Sucesso: <b>${j.success}</b> | Falhas: <b>${j.failed}</b>` + renderTable(j.results);
+  } catch (err) {
+    $('#publishResult').textContent = 'Erro: ' + err.message;
+  } finally {
+    $('#btnPublish').disabled = false;
+  }
+});
+
+$('#btnLogs').addEventListener('click', async () => {
+  $('#logs').textContent = 'Carregando logs...';
+  try {
+    const r = await fetch('/api/logs');
+    const j = await r.json();
+    $('#logs').innerHTML = renderTable(j.logs.slice(-100).reverse());
+  } catch (err) {
+    $('#logs').textContent = 'Erro: ' + err.message;
+  }
+});
+
+function renderTable(rows) {
+  if (!rows || !rows.length) return '<p class="muted">(sem dados)</p>';
+  const cols = Object.keys(rows[0]);
+  const head = '<tr>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr>';
+  const body = rows.map(r => '<tr>' + cols.map(c => `<td>${String(r[c] ?? '')}</td>`).join('') + '</tr>').join('');
+  return '<table>' + head + body + '</table>';
+}
+</script>
+</body>
+</html>
