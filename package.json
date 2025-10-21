@@ -1,7 +1,7 @@
 {
   "name": "mvp-publicador",
   "version": "1.0.0",
-  "description": "Publicador em massa CSV → Mercado Livre",
+  "description": "Publicador CSV → Mercado Livre (AutoVend)",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -10,12 +10,10 @@
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "csv-parse": "^5.5.6",
-    "csv-parser": "^3.2.0",
-    "dotenv": "^16.6.1",
-    "express": "^4.21.2",
-    "fs-extra": "^11.2.0",
-    "multer": "^1.4.5-lts.1",
+    "csv-parser": "^3.0.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "multer": "^1.4.5",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {
