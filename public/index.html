@@ -1,77 +1,150 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AutoVend - Conecte sua Conta Mercado Livre</title>
-  <style>
-    body {
-      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #ffd100, #ffe76b);
-      height: 100vh;
-      margin: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      text-align: center;
-      color: #333;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AutoVend | Publicador Mercado Livre</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        background-color: #f8fafc;
+      }
+      .card {
+        border-radius: 12px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+      }
+      .btn-upload {
+        background-color: #007bff;
+        color: white;
+        font-weight: 600;
+      }
+      .btn-upload:hover {
+        background-color: #0056b3;
+      }
+      .progress {
+        height: 25px;
+      }
+      .progress-bar {
+        font-weight: 600;
+      }
+      #loading {
+        display: none;
+      }
+    </style>
+  </head>
 
-    h1 {
-      font-size: 2.5em;
-      color: #333;
-      margin-bottom: 10px;
-    }
+  <body class="py-5">
+    <div class="container">
+      <div class="text-center mb-4">
+        <h1 class="fw-bold text-primary">🚀 AutoVend</h1>
+        <p class="text-muted">
+          Publique seus produtos automaticamente no Mercado Livre via planilha.
+        </p>
+      </div>
 
-    p {
-      font-size: 1.1em;
-      max-width: 500px;
-      line-height: 1.5;
-      margin-bottom: 30px;
-    }
+      <div class="card p-4 mx-auto" style="max-width: 600px;">
+        <form id="uploadForm">
+          <div class="mb-3">
+            <label for="file" class="form-label fw-semibold"
+              >Selecione sua planilha (.xlsx ou .csv):</label
+            >
+            <input
+              type="file"
+              class="form-control"
+              id="file"
+              name="file"
+              accept=".xlsx,.csv"
+              required
+            />
+          </div>
 
-    a.btn {
-      background-color: #3483fa;
-      color: white;
-      padding: 14px 28px;
-      border-radius: 8px;
-      text-decoration: none;
-      font-weight: bold;
-      transition: 0.2s;
-    }
+          <div class="text-center">
+            <button type="submit" class="btn btn-upload px-4 py-2">
+              📤 Enviar e Publicar
+            </button>
+          </div>
+        </form>
 
-    a.btn:hover {
-      background-color: #2968c8;
-    }
+        <div id="loading" class="mt-4 text-center">
+          <div class="spinner-border text-primary mb-3" role="status"></div>
+          <p class="fw-semibold">Processando planilha, aguarde...</p>
+          <div class="progress">
+            <div
+              id="progress-bar"
+              class="progress-bar progress-bar-striped progress-bar-animated"
+              style="width: 0%"
+            >
+              0%
+            </div>
+          </div>
+        </div>
+      </div>
 
-    footer {
-      position: absolute;
-      bottom: 20px;
-      font-size: 0.9em;
-      color: #555;
-    }
+      <footer class="text-center mt-5 text-muted">
+        <p>
+          Desenvolvido com ❤️ por <strong>AutoVend</strong> — Integração Mercado
+          Livre
+        </p>
+      </footer>
+    </div>
 
-    .logo {
-      width: 130px;
-      margin-bottom: 20px;
-    }
+    <script>
+      const form = document.getElementById("uploadForm");
+      const loading = document.getElementById("loading");
+      const progressBar = document.getElementById("progress-bar");
 
-    .box {
-      background: white;
-      padding: 40px 50px;
-      border-radius: 16px;
-      box-shadow: 0px 6px 20px rgba(0,0,0,0.1);
-    }
-  </style>
-</head>
-<body>
-  <div class="box">
-    <img class="logo" src="https://logodownload.org/wp-content/uploads/2019/05/mercado-livre-logo.png" alt="Mercado Livre Logo">
-    <h1>Conecte sua Conta Mercado Livre</h1>
-    <p>Para continuar usando o AutoVend, clique abaixo e autorize o aplicativo a acessar sua conta Mercado Livre com segurança.</p>
-    <a href="/ml/auth" class="btn">🔗 Conectar Mercado Livre</a>
-  </div>
-  <footer>© 2025 AutoVend - Integração Mercado Livre</footer>
-</body>
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const fileInput = document.getElementById("file");
+        const file = fileInput.files[0];
+        if (!file) {
+          alert("Por favor, selecione um arquivo primeiro.");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        loading.style.display = "block";
+        progressBar.style.width = "20%";
+        progressBar.textContent = "Enviando...";
+
+        try {
+          const res = await fetch("/api/upload", {
+            method: "POST",
+            body: formData,
+          });
+
+          progressBar.style.width = "70%";
+          progressBar.textContent = "Publicando produtos...";
+
+          if (res.ok) {
+            const data = await res.json();
+            console.log("Resultado:", data);
+
+            progressBar.style.width = "100%";
+            progressBar.classList.remove("progress-bar-animated");
+            progressBar.textContent = "Concluído!";
+
+            // Redireciona para o painel
+            setTimeout(() => {
+              window.location.href = "/painel.html";
+            }, 1000);
+          } else {
+            progressBar.classList.add("bg-danger");
+            progressBar.textContent = "Erro no envio";
+            alert("Erro ao processar o arquivo!");
+          }
+        } catch (err) {
+          progressBar.classList.add("bg-danger");
+          progressBar.textContent = "Falha de conexão";
+          alert("Erro ao conectar ao servidor: " + err.message);
+        }
+      });
+    </script>
+  </body>
 </html>
