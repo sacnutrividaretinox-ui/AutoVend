@@ -5,30 +5,128 @@
   <title>AutoVend Painel</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      max-width: 800px;
-      margin: 50px auto;
+      font-family: "Segoe UI", Roboto, sans-serif;
+      max-width: 960px;
+      margin: 40px auto;
+      background: #f8f9fa;
+      color: #111;
     }
-    h1 { color: #222; }
-    .status { color: green; }
-    .user-box {
-      background: #f8f8f8;
-      padding: 10px 16px;
-      border-radius: 10px;
+    h1 {
+      text-align: center;
+      color: #222;
+      margin-bottom: 10px;
+    }
+    .status {
+      text-align: center;
+      color: green;
+      margin-bottom: 20px;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 20px;
       margin-top: 20px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+    button {
+      background: #007aff;
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    th, td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #eee;
+      text-align: left;
+    }
+    th {
+      background: #f1f3f5;
+    }
+    tr:hover {
+      background: #f9fafb;
+    }
+    .success {
+      color: green;
+      font-weight: 500;
+    }
+    .fail {
+      color: red;
+      font-weight: 500;
+    }
+    .user-box {
+      background: #fff;
+      padding: 16px;
+      border-radius: 12px;
       border: 1px solid #ddd;
+      margin-bottom: 20px;
+    }
+    a.ml-link {
+      color: #007aff;
+      text-decoration: none;
     }
   </style>
 </head>
 <body>
   <h1>🚀 AutoVend Painel</h1>
-  <p class="status">Aplicativo conectado com sucesso ✅</p>
+  <p class="status">Aplicativo conectado ao Mercado Livre ✅</p>
+
   <div class="user-box" id="userInfo">Carregando informações...</div>
 
+  <div class="card">
+    <h2>📦 Upload do CSV</h2>
+    <form id="formUpload">
+      <input type="file" name="file" accept=".csv" required />
+      <button type="submit">📤 Enviar CSV</button>
+    </form>
+    <div id="uploadResult" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>🚀 Publicar no Mercado Livre</h2>
+    <label>
+      Limite:
+      <input id="limit" type="number" min="1" max="200" value="50" />
+    </label>
+    <button id="btnPublish">Publicar Agora</button>
+    <div id="result" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>📊 Produtos Publicados</h2>
+    <table id="resultsTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>SKU</th>
+          <th>Status</th>
+          <th>ID ML</th>
+          <th>Link</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
   <hr />
-  <a href="/">⬅️ Voltar ao início</a>
+  <p style="text-align:center;">
+    <a href="/" style="color:#555;">⬅️ Voltar ao início</a>
+  </p>
 
   <script>
+    // === Carregar sessão ===
     async function loadSession() {
       try {
         const res = await fetch("/api/session");
@@ -46,6 +144,68 @@
     }
 
     loadSession();
+
+    // === Upload CSV ===
+    document.getElementById("formUpload").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const resultDiv = document.getElementById("uploadResult");
+      resultDiv.textContent = "⏳ Enviando...";
+      try {
+        const r = await fetch("/api/upload", { method: "POST", body: fd });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || "Erro no upload");
+        resultDiv.innerHTML = `✅ ${j.count} produtos carregados com sucesso!`;
+      } catch (err) {
+        resultDiv.textContent = "❌ Erro: " + err.message;
+      }
+    });
+
+    // === Publicar produtos ===
+    document.getElementById("btnPublish").addEventListener("click", async () => {
+      const limit = Number(document.getElementById("limit").value || 50);
+      const btn = document.getElementById("btnPublish");
+      const resultDiv = document.getElementById("result");
+      btn.disabled = true;
+      resultDiv.textContent = "⏳ Publicando produtos...";
+      try {
+        const r = await fetch("/api/publish/ml", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ limit }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || "Falha ao publicar");
+
+        resultDiv.innerHTML = `✅ Publicação concluída!<br/>Sucesso: ${j.success} | Falhas: ${j.failed}`;
+        renderResults(j.results);
+      } catch (err) {
+        resultDiv.textContent = "❌ Erro: " + err.message;
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // === Renderizar tabela de resultados ===
+    function renderResults(results) {
+      const tbody = document.querySelector("#resultsTable tbody");
+      tbody.innerHTML = "";
+      if (!results || !results.length) {
+        tbody.innerHTML = "<tr><td colspan='5'>Nenhum resultado</td></tr>";
+        return;
+      }
+      results.forEach((r, i) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${i + 1}</td>
+          <td>${r.sku || "-"}</td>
+          <td class="${r.status === 'OK' ? 'success' : 'fail'}">${r.status || r.error}</td>
+          <td>${r.id || "-"}</td>
+          <td>${r.id ? `<a class="ml-link" href="https://produto.mercadolivre.com.br/${r.id}" target="_blank">🔗 Ver</a>` : "-"}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
   </script>
 </body>
 </html>
