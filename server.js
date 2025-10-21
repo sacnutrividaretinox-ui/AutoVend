@@ -27,12 +27,10 @@ app.get("/ml/auth", (req, res) => {
 // === Callback de autenticação ===
 app.get("/ml/callback", async (req, res) => {
   const code = req.query.code;
-
-  if (!code) {
-    return res.status(400).send("Código de autorização ausente.");
-  }
+  if (!code) return res.status(400).send("Código de autorização ausente.");
 
   try {
+    // 1️⃣ Solicita o token ao Mercado Livre
     const response = await fetch("https://api.mercadolibre.com/oauth/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -47,20 +45,41 @@ app.get("/ml/callback", async (req, res) => {
 
     const data = await response.json();
 
-    if (data.access_token) {
-      console.log("✅ Autenticação bem-sucedida:", data);
-      res.send(`
-        <h2 style="color:green;">✅ Aplicativo conectado com sucesso!</h2>
-        <pre>${JSON.stringify(data, null, 2)}</pre>
-      `);
-    } else {
+    if (!data.access_token) {
       console.error("❌ Erro na autenticação:", data);
-      res.status(400).send(`<h3>Erro na autenticação</h3><pre>${JSON.stringify(data, null, 2)}</pre>`);
+      return res.status(400).send(`<h3>Erro na autenticação</h3><pre>${JSON.stringify(data, null, 2)}</pre>`);
     }
+
+    // 2️⃣ Guarda o token em memória
+    global.meliSession = {
+      token: data.access_token,
+      user_id: data.user_id,
+    };
+
+    // 3️⃣ Busca dados do usuário logado
+    const userResponse = await fetch(`https://api.mercadolibre.com/users/${data.user_id}`, {
+      headers: { Authorization: `Bearer ${data.access_token}` },
+    });
+    const userInfo = await userResponse.json();
+
+    // 4️⃣ Salva também o nome e e-mail na sessão
+    global.meliSession.name = userInfo.nickname || userInfo.first_name || "Usuário";
+    global.meliSession.email = userInfo.email || "E-mail não disponível";
+
+    console.log("✅ Conectado como:", global.meliSession);
+
+    // 5️⃣ Redireciona para o painel
+    res.redirect("/painel.html");
   } catch (error) {
     console.error("Erro no callback:", error);
     res.status(500).send("Erro interno no servidor");
   }
+});
+
+// === Dados da sessão atual ===
+app.get("/api/session", (req, res) => {
+  if (!global.meliSession) return res.status(401).json({ error: "Não autenticado" });
+  res.json(global.meliSession);
 });
 
 // === Rota fallback (SPA ou HTML simples) ===

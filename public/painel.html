@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <title>AutoVend Painel</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+    }
+    h1 { color: #222; }
+    .status { color: green; }
+    .user-box {
+      background: #f8f8f8;
+      padding: 10px 16px;
+      border-radius: 10px;
+      margin-top: 20px;
+      border: 1px solid #ddd;
+    }
+  </style>
+</head>
+<body>
+  <h1>🚀 AutoVend Painel</h1>
+  <p class="status">Aplicativo conectado com sucesso ✅</p>
+  <div class="user-box" id="userInfo">Carregando informações...</div>
+
+  <hr />
+  <a href="/">⬅️ Voltar ao início</a>
+
+  <script>
+    async function loadSession() {
+      try {
+        const res = await fetch("/api/session");
+        if (!res.ok) throw new Error("Sessão expirada");
+        const data = await res.json();
+        document.getElementById("userInfo").innerHTML = `
+          <b>Nome:</b> ${data.name}<br/>
+          <b>E-mail:</b> ${data.email}<br/>
+          <b>ID:</b> ${data.user_id}
+        `;
+      } catch (err) {
+        document.getElementById("userInfo").innerHTML =
+          "<span style='color:red;'>Erro ao carregar sessão. Faça login novamente.</span>";
+      }
+    }
+
+    loadSession();
+  </script>
+</body>
+</html>
