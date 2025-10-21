@@ -120,20 +120,26 @@ app.post("/api/publish/ml", async (req, res) => {
     processed++;
     try {
       const payload = {
-        title: row.title,
-        category_id: row.category_ml || "MLB3530",
-        price: Number(row.price) || 10,
-        currency_id: "BRL",
-        available_quantity: Number(row.stock) || 1,
-        buying_mode: "buy_it_now",
-        listing_type_id: "gold_special",
-        condition: "new",
-        description: { plain_text: row.description || "Sem descrição." },
-        pictures: (row.images || "")
+  title: row.title?.trim() || "Produto sem título",
+  category_id: row.category_ml?.trim() || "MLB3530",
+  price: Number(row.price) || 10,
+  currency_id: "BRL",
+  available_quantity: Number(row.stock) || 1,
+  buying_mode: "buy_it_now",
+  listing_type_id: "gold_special",
+  condition: "new",
+  description: {
+    plain_text: row.description?.trim() || "Produto novo e pronto para envio.",
+  },
+  pictures:
+    row.images
+      ? row.images
           .split(",")
           .map((url) => ({ source: url.trim() }))
-          .slice(0, 5),
-      };
+          .filter((p) => p.source.startsWith("http"))
+          .slice(0, 5)
+      : [],
+};
 
       const resp = await fetch("https://api.mercadolibre.com/items", {
         method: "POST",
