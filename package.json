@@ -1,19 +1,17 @@
 {
-  "name": "mvp-publicador",
+  "name": "autovend",
   "version": "1.0.0",
-  "description": "Publicador CSV → Mercado Livre (AutoVend)",
+  "description": "AutoVend - Integração Mercado Livre",
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "csv-parser": "^3.0.0",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "multer": "^1.4.5",
     "node-fetch": "^3.3.2"
   },
   "devDependencies": {

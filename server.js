@@ -1,92 +1,73 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-import multer from "multer";
-import csvParser from "csv-parser";
-import fs from "fs";
 import fetch from "node-fetch";
+import dotenv from "dotenv";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
 app.use(express.json());
+app.use(cors());
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const upload = multer({ dest: "uploads/" });
-
-// Banco local simples (para logs e CSV temporário)
-const DB_FILE = resolve(__dirname, "db.json");
-if (!fs.existsSync(DB_FILE)) fs.writeFileSync(DB_FILE, JSON.stringify({ produtos: [], logs: [] }, null, 2));
-
-// === ROTAS ===
-
-// Servir o front-end
-app.use(express.static(__dirname));
-
+// === Rota inicial ===
 app.get("/", (req, res) => {
   res.sendFile(resolve(__dirname, "index.html"));
 });
 
-// Upload CSV
-app.post("/api/upload", upload.single("file"), async (req, res) => {
+// === Autenticação Mercado Livre ===
+app.get("/ml/auth", (req, res) => {
+  const redirectUri = `${process.env.BASE_URL}/ml/callback`;
+  const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${process.env.ML_CLIENT_ID}&redirect_uri=${redirectUri}`;
+  res.redirect(authUrl);
+});
+
+// === Callback do Mercado Livre ===
+app.get("/ml/callback", async (req, res) => {
+  const code = req.query.code;
+
+  if (!code) {
+    return res.status(400).send("Código de autorização ausente.");
+  }
+
   try {
-    const results = [];
-    fs.createReadStream(req.file.path)
-      .pipe(csvParser())
-      .on("data", (row) => results.push(row))
-      .on("end", () => {
-        const data = JSON.parse(fs.readFileSync(DB_FILE));
-        data.produtos = results;
-        fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-        fs.unlinkSync(req.file.path);
-        res.json({ count: results.length, sample: results.slice(0, 5) });
-      });
-  } catch (err) {
-    console.error("Erro upload:", err);
-    res.status(500).json({ error: "Erro ao processar CSV" });
-  }
-});
+    const response = await fetch("https://api.mercadolibre.com/oauth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grant_type: "authorization_code",
+        client_id: process.env.ML_CLIENT_ID,
+        client_secret: process.env.ML_CLIENT_SECRET,
+        code,
+        redirect_uri: `${process.env.BASE_URL}/ml/callback`,
+      }),
+    });
 
-// Publicação em massa
-app.post("/api/publish/ml", async (req, res) => {
-  const { limit = 10 } = req.body;
-  const data = JSON.parse(fs.readFileSync(DB_FILE));
-  const produtos = data.produtos.slice(0, limit);
+    const data = await response.json();
 
-  let success = 0;
-  let failed = 0;
-  const results = [];
-
-  for (const p of produtos) {
-    try {
-      // Aqui você pode fazer chamadas reais para a API do Mercado Livre
-      console.log("Publicando:", p.title || p.sku);
-      success++;
-      results.push({ status: "✅", title: p.title || "-", sku: p.sku || "-" });
-    } catch (err) {
-      failed++;
-      results.push({ status: "❌", title: p.title || "-", error: err.message });
+    if (data.access_token) {
+      console.log("✅ Autenticação bem-sucedida:", data);
+      res.send(`
+        <h2 style="color:green;">✅ Aplicativo conectado com sucesso!</h2>
+        <pre>${JSON.stringify(data, null, 2)}</pre>
+      `);
+    } else {
+      console.error("❌ Erro na autenticação:", data);
+      res.status(400).send(`<h3>Erro na autenticação</h3><pre>${JSON.stringify(data, null, 2)}</pre>`);
     }
+  } catch (error) {
+    console.error("Erro no callback:", error);
+    res.status(500).send("Erro interno no servidor");
   }
-
-  const logEntry = { date: new Date().toISOString(), success, failed };
-  data.logs.push(logEntry);
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
-
-  res.json({ processed: produtos.length, success, failed, results });
 });
 
-// Logs
-app.get("/api/logs", (req, res) => {
-  const data = JSON.parse(fs.readFileSync(DB_FILE));
-  res.json({ logs: data.logs || [] });
-});
+// === Servir front ===
+app.use(express.static(__dirname));
 
-// === PORT ===
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`🚀 AutoVend rodando na porta ${PORT}`));
