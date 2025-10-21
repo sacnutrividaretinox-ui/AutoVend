@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
-import fs from "fs";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 
@@ -15,19 +14,17 @@ app.use(cors());
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// === Rota inicial ===
-app.get("/", (req, res) => {
-  res.sendFile(resolve(__dirname, "index.html"));
-});
+// === Servir arquivos estáticos (frontend) ===
+app.use(express.static(resolve(__dirname, "public")));
 
-// === Autenticação Mercado Livre ===
+// === Rota de autenticação Mercado Livre ===
 app.get("/ml/auth", (req, res) => {
   const redirectUri = `${process.env.BASE_URL}/ml/callback`;
   const authUrl = `https://auth.mercadolivre.com.br/authorization?response_type=code&client_id=${process.env.ML_CLIENT_ID}&redirect_uri=${redirectUri}`;
   res.redirect(authUrl);
 });
 
-// === Callback do Mercado Livre ===
+// === Callback de autenticação ===
 app.get("/ml/callback", async (req, res) => {
   const code = req.query.code;
 
@@ -66,8 +63,10 @@ app.get("/ml/callback", async (req, res) => {
   }
 });
 
-// === Servir front ===
-app.use(express.static(__dirname));
+// === Rota fallback (SPA ou HTML simples) ===
+app.get("*", (req, res) => {
+  res.sendFile(resolve(__dirname, "public", "index.html"));
+});
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`🚀 AutoVend rodando na porta ${PORT}`));
